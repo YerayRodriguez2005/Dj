@@ -1,9 +1,9 @@
 {
-  "bpm": 128,
+  "bpm": 118,
   "mix_in":0,
-  "mix_out": 120,
+  "mix_out": 65.4,
   "vocals": "baja",
-  "energy": 2,
+  "energy": 1,
   "energyMode": "keep"
 }
 

@@ -38,14 +38,14 @@ python --version
 
 **2. Crear entorno virtual (si no existe):**
 ```powershell
-cd "c:\Users\yeray\Documents\G"
+cd "c:\Users\yeray\Documents\DJ"
 python -m venv .venv
 .venv\Scripts\activate
 ```
 
 **3. Iniciar servidor web:**
 ```powershell
-cd "c:\Users\yeray\Documents\G"
+cd "c:\Users\yeray\Documents\DJ"
 python -m http.server 8000
 ```
 
@@ -81,7 +81,8 @@ musica/json/NombreCancion.json
   "bpm": 100,
   "mix_in": 0,
   "mix_out": 30,
-  "vocals": "alta"
+  "vocals": "alta",
+   "energy": 3
 }
 ```
 

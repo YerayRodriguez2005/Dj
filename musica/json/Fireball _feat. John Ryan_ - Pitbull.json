@@ -2,6 +2,8 @@
   "bpm": 123,
   "mix_in": 140.4,
   "mix_out": 212.4,
-  "vocals": "alta"
+  "vocals": "baja",
+  "energy": 2,
+  "energyMode": "up"
 }
 

@@ -3,8 +3,8 @@
  */
 class TransitionCalculator {
   constructor() {
-    this.CROSSFADE_MIN = 10; // segundos mínimos de crossfade
-    this.CROSSFADE_MAX = 15; // segundos máximos de crossfade
+    this.CROSSFADE_MIN = 6; // segundos mínimos de crossfade
+    this.CROSSFADE_MAX = 8; // segundos máximos de crossfade
     this.MAX_BPM_DIFF = 10;  // diferencia máxima de BPM para ajustar
   }
 

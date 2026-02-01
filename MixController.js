@@ -16,6 +16,10 @@ class MixController {
     this.currentGain = null;
     this.isPlaying = false;
     this.startTime = null;
+    
+    // ⭐ Tracking de energía
+    this.energyStreak = { level: null, count: 0 };
+    this.currentEnergyMode = 'keep'; // 'up' | 'keep' | 'down'
   }
 
   /**
@@ -136,6 +140,12 @@ class MixController {
     console.log(`🎵 Iniciando con: "${firstTrack.trackId}"`);
     this.playTrack(firstTrack.trackId, firstTrack.metadata);
     
+    // ⭐ IMPORTANTE: Agregar la primera canción al array de recientes
+    this.trackSelector.addToRecent(firstTrack.trackId);
+    
+    // ⭐ Inicializar streak de energía
+    this.updateEnergyStreak(firstTrack.metadata.energy);
+    
     // Activar selección automática
     this.scheduleNextAutoSelection(context);
   }
@@ -159,7 +169,18 @@ class MixController {
     );
     
     setTimeout(() => {
-      // ★ LA IA DECIDE AQUÍ ★
+      // ⭐ PASO 1: DECIDIR INTENCIÓN basándose en el streak actual
+      // (esto usa la canción que ESTÁ SONANDO AHORA como contexto)
+      this.currentEnergyMode = this.decideEnergyMode();
+      console.log(`🎚️ Intención decidida: "${this.currentEnergyMode}" (basado en streak actual)`);
+      
+      // Actualizar contexto con el energyMode
+      const updatedContext = {
+        ...context,
+        energyDirection: this.currentEnergyMode
+      };
+      
+      // ⭐ PASO 2: ELEGIR canción según la intención
       const available = this.getAvailableTracks();
       
       if (available.length === 0) {
@@ -170,8 +191,14 @@ class MixController {
       const nextTrack = this.trackSelector.selectNextTrack(
         this.currentTrack,
         available,
-        context
+        updatedContext
       );
+      
+      console.log(`✅ Elegida: "${nextTrack.trackId}" (energía ${nextTrack.metadata.energy})`);
+      
+      // ⭐ PASO 3: ACTUALIZAR STREAK con la canción que VA A SONAR
+      // Esto se hace ANTES de la transición para que esté listo para la próxima decisión
+      this.updateEnergyStreak(nextTrack.metadata.energy);
       
       // Programar transición
       this.scheduleTransition(nextTrack);
@@ -266,6 +293,8 @@ class MixController {
     this.currentSource = source;
     this.currentGain = gainNode;
     this.startTime = newStartTime;
+    
+    // El streak ya fue actualizado en scheduleNextAutoSelection
   }
 
   /**
@@ -275,6 +304,64 @@ class MixController {
     return this.playlist.filter(
       track => track.trackId !== this.currentTrack.trackId
     );
+  }
+
+  /**
+   * ⭐ Actualiza el contador de energía consecutiva
+   */
+  updateEnergyStreak(newEnergy) {
+    if (this.energyStreak.level === newEnergy) {
+      this.energyStreak.count++;
+    } else {
+      this.energyStreak.level = newEnergy;
+      this.energyStreak.count = 1;
+    }
+    
+    console.log(`⚡ Streak: ${this.energyStreak.count} canciones en energía ${newEnergy}`);
+  }
+
+  /**
+   * ⭐ Decide el modo de energía para la siguiente canción
+   * REGLAS SIMPLES:
+   * - No estar mucho tiempo en extremos (energía 1 o 3)
+   * - Si llevas 3+ canciones en el mismo nivel → forzar cambio
+   * - En energía media (2) → más libertad
+   */
+  decideEnergyMode() {
+    const currentEnergy = this.currentTrack.metadata.energy;
+    
+    // REGLA 1: Si llevas 3+ canciones en el mismo nivel → FORZAR cambio
+    if (this.energyStreak.count >= 3) {
+      console.log('🔄 Forzando cambio de energía (3+ canciones consecutivas)');
+      
+      if (currentEnergy === 3) return 'down';
+      if (currentEnergy === 1) return 'up';
+      
+      // Si estás en 2, elegir aleatoriamente
+      return Math.random() < 0.5 ? 'up' : 'down';
+    }
+    
+    // REGLA 2: En energía extrema (1 o 3), tender a volver al centro
+    if (currentEnergy === 3) {
+      // Energía alta: 70% probabilidad de bajar, 30% mantener
+      return Math.random() < 0.7 ? 'down' : 'keep';
+    }
+    
+    if (currentEnergy === 1) {
+      // Energía baja: 70% probabilidad de subir, 30% mantener
+      return Math.random() < 0.7 ? 'up' : 'keep';
+    }
+    
+    // REGLA 3: En energía media (2) → más libertad
+    if (currentEnergy === 2) {
+      const rand = Math.random();
+      if (rand < 0.35) return 'up';
+      if (rand < 0.70) return 'keep';
+      return 'down';
+    }
+    
+    // DEFAULT: mantener
+    return 'keep';
   }
 
   /**

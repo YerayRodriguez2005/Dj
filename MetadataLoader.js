@@ -32,8 +32,9 @@ class MetadataLoader {
    * @param {string} source - Nombre del archivo (para logs)
    */
   validateMetadata(data, source = '') {
-    const required = ['bpm', 'mix_in', 'mix_out', 'vocals'];
+    const required = ['bpm', 'mix_in', 'mix_out', 'vocals', 'energy'];
     const vocalsValid = ['alta', 'media', 'baja'];
+    const energyValid = [1, 2, 3];
     
     // Verificar campos requeridos
     required.forEach(field => {
@@ -45,6 +46,11 @@ class MetadataLoader {
     // Validar nivel de vocals
     if (!vocalsValid.includes(data.vocals)) {
       throw new Error(`${source}: Nivel de vocals inválido: "${data.vocals}". Debe ser: alta, media o baja`);
+    }
+    
+    // Validar nivel de energy
+    if (!energyValid.includes(data.energy)) {
+      throw new Error(`${source}: Nivel de energy inválido: "${data.energy}". Debe ser: 1, 2 o 3`);
     }
     
     // Validar que mix_in sea menor que mix_out

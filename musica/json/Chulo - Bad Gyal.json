@@ -1,6 +1,8 @@
 {
   "bpm": 97,
   "mix_in": 0,
-  "mix_out": 77.4,
-  "vocals": "media"
+  "mix_out": 104.2,
+  "vocals": "baja",
+  "energy": 1,
+  "energyMode": "up"
 }
