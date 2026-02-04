@@ -1,6 +1,8 @@
 /**
  * Controlador principal del DJ automático
  * Integra todos los módulos y gestiona el flujo de reproducción
+ * 
+ * 🆕 FASE 3: Salida anticipada conservadora
  */
 class MixController {
   constructor() {
@@ -8,7 +10,7 @@ class MixController {
     this.transitionCalc = new TransitionCalculator();
     this.audioPlayer = new AudioPlayer();
     this.trackSelector = new TrackSelector();
-    this.fileScanner = new FileScanner(); // ← NUEVO
+    this.fileScanner = new FileScanner();
     
     this.playlist = [];
     this.currentTrack = null;
@@ -20,15 +22,26 @@ class MixController {
     // ⭐ Tracking de energía
     this.energyStreak = { level: null, count: 0 };
     this.currentEnergyMode = 'keep'; // 'up' | 'keep' | 'down'
+    
+    // 🆕 FASE 3: Tracking de salidas anticipadas
+    this.earlyExitsCount = 0;
+    this.songsPlayed = 0;
+    
+    // 🆕 Constantes de salida anticipada
+    this.EARLY_EXIT_CONFIG = {
+      MIN_PLAY_TIME: 30,        // segundos mínimos de reproducción
+      SAFE_TIME: 40,            // 🆕 tiempo mínimo ABSOLUTO que debe sonar
+      MAX_REDUCTION: 20,        // 🆕 reducción máxima permitida (segundos)
+      MAX_RATIO: 0.25,          // máximo 25% de canciones con salida anticipada
+      STREAK_THRESHOLD: 3,      // cuántas canciones iguales para forzar cambio
+      EXTREME_STREAK_THRESHOLD: 2, // umbral para energía extrema (1 o 3)
+      REDUCTION_STREAK_BREAK: 15,   // segundos a quitar por streak largo
+      REDUCTION_EXTREME: 20         // segundos a quitar por energía extrema
+    };
   }
 
   /**
    * Prepara una canción: carga audio + metadata
-   * 
-   * @param {string} trackId - Nombre de la canción
-   * @param {string} audioPath - Ruta al MP3
-   * @param {string} metadataPath - Ruta al JSON
-   * @returns {Promise<Object>} {trackId, metadata}
    */
   async prepareTrack(trackId, audioPath, metadataPath) {
     const metadata = await this.metadataLoader.loadMetadata(metadataPath);
@@ -39,8 +52,6 @@ class MixController {
 
   /**
    * Carga toda la biblioteca de música
-   * 
-   * @param {Array} tracks - [{id, audioPath, metadataPath}, ...]
    */
   async loadLibrary(tracks) {
     console.log('📚 Cargando biblioteca de música...');
@@ -60,17 +71,19 @@ class MixController {
     
     console.log(`✅ ${this.playlist.length} canciones disponibles`);
   }
+
+  /**
+   * 🆕 Carga automática escaneando carpetas
+   */
   async autoLoadLibrary(songsFolder = 'musica/canciones', jsonFolder = 'musica/json') {
     console.log('🤖 Modo automático: escaneando carpetas...');
     
-    // Escanear y obtener lista
     const foundTracks = await this.fileScanner.scanMusicFolder(songsFolder, jsonFolder);
     
     if (foundTracks.length === 0) {
       throw new Error('❌ No se encontraron canciones con metadata válida');
     }
     
-    // Cargar todo
     await this.loadLibrary(foundTracks);
     
     return foundTracks;
@@ -78,25 +91,18 @@ class MixController {
 
   /**
    * Inicia una canción
-   * 
-   * @param {string} trackId - ID de la canción
-   * @param {Object} metadata - Metadata de la canción
-   * @param {number|null} targetBPM - BPM objetivo (opcional)
    */
   playTrack(trackId, metadata, targetBPM = null) {
-    // Calcular playbackRate si hay BPM objetivo
     const playbackRate = targetBPM 
       ? this.transitionCalc.calculatePlaybackRate(metadata.bpm, targetBPM)
       : 1.0;
 
-    // Crear nodo de reproducción
     const { source, gainNode } = this.audioPlayer.createSourceNode(
       trackId,
       metadata.mix_in,
       playbackRate
     );
 
-    // Fade in suave si es la primera canción
     if (!this.isPlaying) {
       const ctx = this.audioPlayer.audioContext;
       gainNode.gain.setValueAtTime(0, ctx.currentTime);
@@ -105,11 +111,9 @@ class MixController {
       gainNode.gain.value = 1.0;
     }
 
-    // Reproducir desde mix_in
     source.start(0, metadata.mix_in);
     this.startTime = this.audioPlayer.audioContext.currentTime;
 
-    // Guardar estado
     this.currentTrack = { trackId, metadata };
     this.currentSource = source;
     this.currentGain = gainNode;
@@ -122,17 +126,13 @@ class MixController {
   }
 
   /**
-   * ★ MODO AUTOMÁTICO ★
-   * La IA selecciona y mezcla canciones continuamente
-   * 
-   * @param {Object} context - {energyDirection, etc.}
+   * ⭐ MODO AUTOMÁTICO
    */
   startAutoMode(context = {}) {
     if (this.playlist.length === 0) {
       throw new Error('❌ La biblioteca está vacía. Usa loadLibrary() primero.');
     }
 
-    // Seleccionar primera canción (aleatoria por ahora)
     const firstTrack = this.playlist[
       Math.floor(Math.random() * this.playlist.length)
     ];
@@ -140,41 +140,214 @@ class MixController {
     console.log(`🎵 Iniciando con: "${firstTrack.trackId}"`);
     this.playTrack(firstTrack.trackId, firstTrack.metadata);
     
-    // ⭐ IMPORTANTE: Agregar la primera canción al array de recientes
     this.trackSelector.addToRecent(firstTrack.trackId);
-    
-    // ⭐ Inicializar streak de energía
     this.updateEnergyStreak(firstTrack.metadata.energy);
     
-    // Activar selección automática
+    // 🆕 Incrementar contador de canciones (la primera también cuenta)
+    this.songsPlayed++;
+    
     this.scheduleNextAutoSelection(context);
   }
 
   /**
-   * Programa la próxima selección automática de canción
+   * 🆕 FASE 3: Decisión de salida anticipada
+   * 
+   * @param {Object} currentMeta - metadata de la canción actual
+   * @returns {Object} {allowed, reason, reductionSeconds}
+   */
+  shouldExitEarly(currentMeta) {
+    const config = this.EARLY_EXIT_CONFIG;
+    
+    // ═══════════════════════════════════════════════════════════
+    // 🆕 AJUSTE 1: Si energyMode === "keep" → NUNCA salir antes
+    // ═══════════════════════════════════════════════════════════
+    if (this.currentEnergyMode === 'keep') {
+      return { 
+        allowed: false, 
+        reason: 'energy_mode_keep', 
+        reductionSeconds: 0 
+      };
+    }
+    
+    // ═══════════════════════════════════════════════════════════
+    // BARRERA 1: Tiempo mínimo de reproducción
+    // ═══════════════════════════════════════════════════════════
+    const totalDuration = currentMeta.mix_out - currentMeta.mix_in;
+    
+    // Necesitamos al menos MIN_PLAY_TIME + margen para poder cortar
+    if (totalDuration < config.MIN_PLAY_TIME + 20) {
+      return { 
+        allowed: false, 
+        reason: 'too_short', 
+        reductionSeconds: 0 
+      };
+    }
+    
+    // ═══════════════════════════════════════════════════════════
+    // BARRERA 2: Frecuencia de salidas anticipadas
+    // ═══════════════════════════════════════════════════════════
+    if (this.songsPlayed > 0) {
+      const currentRatio = this.earlyExitsCount / this.songsPlayed;
+      
+      if (currentRatio >= config.MAX_RATIO) {
+        console.log(
+          `🚫 Quota de salidas anticipadas excedida: ` +
+          `${this.earlyExitsCount}/${this.songsPlayed} = ${(currentRatio * 100).toFixed(0)}% ` +
+          `(máx: ${config.MAX_RATIO * 100}%)`
+        );
+        return { 
+          allowed: false, 
+          reason: 'quota_exceeded', 
+          reductionSeconds: 0 
+        };
+      }
+    }
+    
+    // ═══════════════════════════════════════════════════════════
+    // MOTIVO 1: Streak largo + cambio forzado
+    // ═══════════════════════════════════════════════════════════
+    if (this.energyStreak.count >= config.STREAK_THRESHOLD) {
+      console.log(
+        `⏩ Motivo detectado: STREAK_BREAK ` +
+        `(${this.energyStreak.count} canciones en energy ${this.energyStreak.level}, ` +
+        `energyMode: "${this.currentEnergyMode}")`
+      );
+      
+      return { 
+        allowed: true, 
+        reason: 'streak_break', 
+        reductionSeconds: config.REDUCTION_STREAK_BREAK 
+      };
+    }
+    
+    // ═══════════════════════════════════════════════════════════
+    // MOTIVO 2: Energía extrema persistente
+    // ═══════════════════════════════════════════════════════════
+    const currentEnergy = currentMeta.energy;
+    
+    if (this.energyStreak.count >= config.EXTREME_STREAK_THRESHOLD) {
+      // Caso A: Energía 3 persistente + necesidad de bajar
+      if (currentEnergy === 3 && this.currentEnergyMode === 'down') {
+        console.log(
+          `⏩ Motivo detectado: HIGH_ENERGY_ESCAPE ` +
+          `(${this.energyStreak.count} canciones en energy 3, bajando)`
+        );
+        
+        return { 
+          allowed: true, 
+          reason: 'high_energy_escape', 
+          reductionSeconds: config.REDUCTION_EXTREME 
+        };
+      }
+      
+      // Caso B: Energía 1 persistente + necesidad de subir
+      if (currentEnergy === 1 && this.currentEnergyMode === 'up') {
+        console.log(
+          `⏩ Motivo detectado: LOW_ENERGY_ESCAPE ` +
+          `(${this.energyStreak.count} canciones en energy 1, subiendo)`
+        );
+        
+        return { 
+          allowed: true, 
+          reason: 'low_energy_escape', 
+          reductionSeconds: config.REDUCTION_EXTREME 
+        };
+      }
+    }
+    
+    // ═══════════════════════════════════════════════════════════
+    // DEFAULT: No hay motivo para salir antes
+    // ═══════════════════════════════════════════════════════════
+    return { 
+      allowed: false, 
+      reason: 'no_trigger', 
+      reductionSeconds: 0 
+    };
+  }
+
+  /**
+   * 🆕 FASE 3: Programa la próxima selección automática de canción
+   * (con soporte para salida anticipada)
    */
   scheduleNextAutoSelection(context) {
     if (!this.currentTrack) return;
 
     const meta = this.currentTrack.metadata;
-    const playDuration = meta.mix_out - meta.mix_in;
-    const crossfadeDuration = this.transitionCalc.CROSSFADE_MIN;
+    const originalMixOut = meta.mix_out;
     
-    // Tiempo hasta que debe empezar la decisión
-    const timeUntilDecision = playDuration - crossfadeDuration - 2; // 2s de margen
+    // ═══════════════════════════════════════════════════════════
+    // 🆕 DECISIÓN DE SALIDA ANTICIPADA
+    // ═══════════════════════════════════════════════════════════
+    const earlyExitDecision = this.shouldExitEarly(meta);
+    
+    let effectiveMixOut = originalMixOut;
+    
+    if (earlyExitDecision.allowed) {
+      const proposedReduction = earlyExitDecision.reductionSeconds;
+      const proposedMixOut = originalMixOut - proposedReduction;
+      const proposedPlayTime = proposedMixOut - meta.mix_in;
+      
+      // ═══════════════════════════════════════════════════════════
+      // 🆕 AJUSTE 2: VALIDACIÓN DE LÍMITES DE SEGURIDAD
+      // ═══════════════════════════════════════════════════════════
+      
+      // LÍMITE 1: Nunca cortar si quedaría menos de SAFE_TIME
+      if (proposedPlayTime < this.EARLY_EXIT_CONFIG.SAFE_TIME) {
+        console.log(
+          `🚫 Reducción bloqueada: quedarían ${proposedPlayTime.toFixed(1)}s ` +
+          `(mínimo SAFE_TIME: ${this.EARLY_EXIT_CONFIG.SAFE_TIME}s)`
+        );
+        effectiveMixOut = originalMixOut; // mantener original
+      }
+      // LÍMITE 2: Nunca reducir más de MAX_REDUCTION segundos
+      else if (proposedReduction > this.EARLY_EXIT_CONFIG.MAX_REDUCTION) {
+        console.log(
+          `🚫 Reducción bloqueada: se proponían ${proposedReduction}s ` +
+          `(máximo: ${this.EARLY_EXIT_CONFIG.MAX_REDUCTION}s)`
+        );
+        effectiveMixOut = originalMixOut; // mantener original
+      }
+      // ✅ TODO OK: aplicar reducción
+      else {
+        effectiveMixOut = proposedMixOut;
+        this.earlyExitsCount++;
+        
+        console.log(
+          `⏩ SALIDA ANTICIPADA ACTIVADA ⏩\n` +
+          `   Canción: "${this.currentTrack.trackId}"\n` +
+          `   Motivo: ${earlyExitDecision.reason}\n` +
+          `   Mix Out original: ${originalMixOut}s\n` +
+          `   Mix Out efectivo: ${effectiveMixOut}s\n` +
+          `   Reducción: -${proposedReduction}s\n` +
+          `   Tiempo de reproducción: ${proposedPlayTime.toFixed(1)}s\n` +
+          `   Ratio actual: ${this.earlyExitsCount}/${this.songsPlayed + 1} = ` +
+          `${((this.earlyExitsCount / (this.songsPlayed + 1)) * 100).toFixed(0)}%`
+        );
+      }
+    } else {
+      console.log(
+        `⏱️ Mix normal hasta ${originalMixOut}s ` +
+        `(motivo no-salida: ${earlyExitDecision.reason})`
+      );
+    }
+    
+    // ═══════════════════════════════════════════════════════════
+    // Calcular timing usando effectiveMixOut
+    // ═══════════════════════════════════════════════════════════
+    const playDuration = effectiveMixOut - meta.mix_in;
+    const crossfadeDuration = this.transitionCalc.CROSSFADE_MIN;
+    const timeUntilDecision = playDuration - crossfadeDuration - 2;
     
     console.log(
       `⏱️ Próxima decisión en ${timeUntilDecision.toFixed(1)}s ` +
-      `(mix_out: ${meta.mix_out}s)`
+      `(mix_out efectivo: ${effectiveMixOut}s)`
     );
     
     setTimeout(() => {
-      // ⭐ PASO 1: DECIDIR INTENCIÓN basándose en el streak actual
-      // (esto usa la canción que ESTÁ SONANDO AHORA como contexto)
+      // ⭐ PASO 1: DECIDIR INTENCIÓN
       this.currentEnergyMode = this.decideEnergyMode();
       console.log(`🎚️ Intención decidida: "${this.currentEnergyMode}" (basado en streak actual)`);
       
-      // Actualizar contexto con el energyMode
       const updatedContext = {
         ...context,
         energyDirection: this.currentEnergyMode
@@ -196,36 +369,34 @@ class MixController {
       
       console.log(`✅ Elegida: "${nextTrack.trackId}" (energía ${nextTrack.metadata.energy})`);
       
-      // ⭐ PASO 3: ACTUALIZAR STREAK con la canción que VA A SONAR
-      // Esto se hace ANTES de la transición para que esté listo para la próxima decisión
+      // ⭐ PASO 3: ACTUALIZAR STREAK
       this.updateEnergyStreak(nextTrack.metadata.energy);
       
       // Programar transición
-      this.scheduleTransition(nextTrack);
+      this.scheduleTransition(nextTrack, effectiveMixOut);
       
       // Después del crossfade, programar la siguiente
       setTimeout(() => {
         this.scheduleNextAutoSelection(context);
-      }, crossfadeDuration * 1000 + 1000); // Esperar crossfade + 1s
+      }, crossfadeDuration * 1000 + 1000);
       
     }, timeUntilDecision * 1000);
   }
 
   /**
-   * Programa la transición a la siguiente canción
+   * 🆕 Programa la transición (ahora acepta mixOut personalizado)
    */
-  scheduleTransition(nextTrackData) {
+  scheduleTransition(nextTrackData, effectiveMixOut) {
     if (!this.currentTrack) {
       throw new Error('❌ No hay canción actual');
     }
 
-    // Calcular detalles de la transición
+    // Usar effectiveMixOut en lugar de metadata.mix_out
     const transition = this.transitionCalc.calculateTransition(
       this.currentTrack,
       nextTrackData
     );
 
-    // Advertir si hay conflicto vocal
     if (transition.vocalConflict) {
       console.error(
         `⚠️⚠️⚠️ CONFLICTO VOCAL DETECTADO ⚠️⚠️⚠️\n` +
@@ -233,18 +404,19 @@ class MixController {
       );
     }
 
-    // Calcular cuándo empezar la siguiente
     const meta = this.currentTrack.metadata;
     const elapsed = this.audioPlayer.audioContext.currentTime - this.startTime;
-    const timeUntilMixOut = (meta.mix_out - meta.mix_in) - elapsed;
+    
+    // 🆕 Calcular usando effectiveMixOut
+    const timeUntilMixOut = (effectiveMixOut - meta.mix_in) - elapsed;
     const startDelay = Math.max(0, timeUntilMixOut - transition.crossfadeDuration);
 
     console.log(
       `🔄 Transición programada en ${startDelay.toFixed(1)}s ` +
-      `(crossfade: ${transition.crossfadeDuration}s)`
+      `(crossfade: ${transition.crossfadeDuration}s, ` +
+      `mix_out efectivo: ${effectiveMixOut}s)`
     );
 
-    // Programar inicio de la siguiente
     setTimeout(() => {
       this.startNextTrack(nextTrackData, transition);
     }, startDelay * 1000);
@@ -254,33 +426,29 @@ class MixController {
    * Inicia la siguiente canción con crossfade
    */
   startNextTrack(nextTrackData, transition) {
-    // Calcular playbackRate para igualar BPMs
     const playbackRate = this.transitionCalc.calculatePlaybackRate(
       nextTrackData.metadata.bpm,
       this.currentTrack.metadata.bpm
     );
 
-    // Crear nodo para la siguiente
     const { source, gainNode } = this.audioPlayer.createSourceNode(
       nextTrackData.trackId,
       nextTrackData.metadata.mix_in,
       playbackRate
     );
 
-    // ★ CROSSFADE ★
+    // ☆ CROSSFADE ☆
     this.audioPlayer.scheduleCrossfade(
-      this.currentGain,     // Fade out actual
-      gainNode,             // Fade in siguiente
+      this.currentGain,
+      gainNode,
       transition.crossfadeDuration
     );
 
-    // Iniciar reproducción
     source.start(0, nextTrackData.metadata.mix_in);
     const newStartTime = this.audioPlayer.audioContext.currentTime;
 
     console.log(`🎵 Transición → "${nextTrackData.trackId}"`);
 
-    // Detener la anterior después del crossfade
     const oldSource = this.currentSource;
     setTimeout(() => {
       if (oldSource) {
@@ -288,13 +456,13 @@ class MixController {
       }
     }, transition.crossfadeDuration * 1000 + 500);
 
-    // Actualizar estado
     this.currentTrack = nextTrackData;
     this.currentSource = source;
     this.currentGain = gainNode;
     this.startTime = newStartTime;
     
-    // El streak ya fue actualizado en scheduleNextAutoSelection
+    // 🆕 Incrementar contador de canciones
+    this.songsPlayed++;
   }
 
   /**
@@ -322,33 +490,27 @@ class MixController {
 
   /**
    * ⭐ Decide el modo de energía para la siguiente canción
-   * REGLAS SIMPLES:
-   * - No estar mucho tiempo en extremos (energía 1 o 3)
-   * - Si llevas 3+ canciones en el mismo nivel → forzar cambio
-   * - En energía media (2) → más libertad
    */
   decideEnergyMode() {
     const currentEnergy = this.currentTrack.metadata.energy;
+    const config = this.EARLY_EXIT_CONFIG;
     
     // REGLA 1: Si llevas 3+ canciones en el mismo nivel → FORZAR cambio
-    if (this.energyStreak.count >= 3) {
+    if (this.energyStreak.count >= config.STREAK_THRESHOLD) {
       console.log('🔄 Forzando cambio de energía (3+ canciones consecutivas)');
       
       if (currentEnergy === 3) return 'down';
       if (currentEnergy === 1) return 'up';
       
-      // Si estás en 2, elegir aleatoriamente
       return Math.random() < 0.5 ? 'up' : 'down';
     }
     
     // REGLA 2: En energía extrema (1 o 3), tender a volver al centro
     if (currentEnergy === 3) {
-      // Energía alta: 70% probabilidad de bajar, 30% mantener
       return Math.random() < 0.7 ? 'down' : 'keep';
     }
     
     if (currentEnergy === 1) {
-      // Energía baja: 70% probabilidad de subir, 30% mantener
       return Math.random() < 0.7 ? 'up' : 'keep';
     }
     
@@ -360,7 +522,6 @@ class MixController {
       return 'down';
     }
     
-    // DEFAULT: mantener
     return 'keep';
   }
 
@@ -373,5 +534,17 @@ class MixController {
       this.isPlaying = false;
       console.log('⏹️ Reproducción detenida');
     }
+  }
+  
+  /**
+   * 🆕 Obtener estadísticas de salida anticipada
+   */
+  getEarlyExitStats() {
+    return {
+      earlyExitsCount: this.earlyExitsCount,
+      songsPlayed: this.songsPlayed,
+      ratio: this.songsPlayed > 0 ? this.earlyExitsCount / this.songsPlayed : 0,
+      maxRatio: this.EARLY_EXIT_CONFIG.MAX_RATIO
+    };
   }
 }
