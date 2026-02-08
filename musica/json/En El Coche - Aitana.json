@@ -4,6 +4,75 @@
   "mix_out": 142.7,
   "vocals": "baja",
   "energy": 3,
-  "energyMode": "down"
+  "energyMode": "down",
+  "analysis": {
+    "version": "1.0",
+    "analyzed_at": "2026-02-07T19:26:31.039740Z",
+    "duration": 142.9,
+    "energy_curve": [
+      0.0,
+      0.498,
+      0.517,
+      0.972,
+      0.377,
+      0.448,
+      0.392,
+      1.0
+    ],
+    "events": [
+      {
+        "type": "buildup",
+        "start": 0.0,
+        "end": 48.0,
+        "increase": 0.97
+      },
+      {
+        "type": "drop",
+        "time": 64.0,
+        "magnitude": 0.6
+      },
+      {
+        "type": "peak",
+        "time": 112.0,
+        "energy": 1.0
+      }
+    ],
+    "structure": [
+      {
+        "section": "intro",
+        "start": 0,
+        "end": 16.0
+      },
+      {
+        "section": "groove",
+        "start": 16.0,
+        "end": 128.0
+      },
+      {
+        "section": "peak",
+        "start": 112.0,
+        "end": 128.0
+      }
+    ],
+    "no_cut_zones": [
+      [
+        0.0,
+        48.0
+      ],
+      [
+        61.0,
+        67.0
+      ],
+      [
+        109.0,
+        115.0
+      ]
+    ],
+    "safe_exit_points": [
+      32.0,
+      80.0,
+      96.0
+    ],
+    "dynamic_range": 1.0
+  }
 }
-

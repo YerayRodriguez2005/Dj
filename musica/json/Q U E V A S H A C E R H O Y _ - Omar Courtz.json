@@ -4,6 +4,135 @@
   "mix_out": 150.6,
   "vocals": "media",
   "energy": 1,
-  "energyMode": "keep"
+  "energyMode": "keep",
+  "analysis": {
+    "version": "1.0",
+    "analyzed_at": "2026-02-07T19:26:35.405035Z",
+    "duration": 224.03,
+    "energy_curve": [
+      0.0,
+      0.83,
+      1.0,
+      0.769,
+      0.898,
+      0.883,
+      0.939,
+      0.986,
+      0.989,
+      0.92,
+      0.825,
+      0.931,
+      0.776,
+      0.183
+    ],
+    "events": [
+      {
+        "type": "peak",
+        "time": 32.0,
+        "energy": 1.0
+      },
+      {
+        "type": "peak",
+        "time": 64.0,
+        "energy": 0.9
+      },
+      {
+        "type": "peak",
+        "time": 80.0,
+        "energy": 0.88
+      },
+      {
+        "type": "peak",
+        "time": 96.0,
+        "energy": 0.94
+      },
+      {
+        "type": "peak",
+        "time": 112.0,
+        "energy": 0.99
+      },
+      {
+        "type": "peak",
+        "time": 128.0,
+        "energy": 0.99
+      },
+      {
+        "type": "peak",
+        "time": 144.0,
+        "energy": 0.92
+      },
+      {
+        "type": "peak",
+        "time": 176.0,
+        "energy": 0.93
+      },
+      {
+        "type": "drop",
+        "time": 208.0,
+        "magnitude": 0.59
+      }
+    ],
+    "structure": [
+      {
+        "section": "intro",
+        "start": 0,
+        "end": 16.0
+      },
+      {
+        "section": "peak",
+        "start": 16.0,
+        "end": 208.0
+      },
+      {
+        "section": "groove",
+        "start": 16.0,
+        "end": 208.0
+      },
+      {
+        "section": "outro",
+        "start": 208.0,
+        "end": 224.0
+      }
+    ],
+    "no_cut_zones": [
+      [
+        29.0,
+        35.0
+      ],
+      [
+        61.0,
+        67.0
+      ],
+      [
+        77.0,
+        83.0
+      ],
+      [
+        93.0,
+        99.0
+      ],
+      [
+        109.0,
+        115.0
+      ],
+      [
+        125.0,
+        131.0
+      ],
+      [
+        141.0,
+        147.0
+      ],
+      [
+        173.0,
+        179.0
+      ],
+      [
+        205.0,
+        211.0
+      ]
+    ],
+    "safe_exit_points": [],
+    "dynamic_range": 1.0
+  }
 }
-

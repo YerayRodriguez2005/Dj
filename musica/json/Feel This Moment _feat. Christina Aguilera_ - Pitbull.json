@@ -4,6 +4,120 @@
   "mix_out": 160.4,
   "vocals": "media",
   "energy": 2,
-  "energyMode": "keep"
+  "energyMode": "keep",
+  "analysis": {
+    "version": "1.0",
+    "analyzed_at": "2026-02-07T19:26:31.764528Z",
+    "duration": 229.51,
+    "energy_curve": [
+      0.0,
+      0.109,
+      0.172,
+      0.507,
+      0.877,
+      1.0,
+      0.378,
+      0.486,
+      0.761,
+      0.981,
+      0.66,
+      0.345,
+      0.713,
+      0.904
+    ],
+    "events": [
+      {
+        "type": "buildup",
+        "start": 0.0,
+        "end": 48.0,
+        "increase": 0.51
+      },
+      {
+        "type": "buildup",
+        "start": 16.0,
+        "end": 64.0,
+        "increase": 0.77
+      },
+      {
+        "type": "buildup",
+        "start": 32.0,
+        "end": 80.0,
+        "increase": 0.83
+      },
+      {
+        "type": "peak",
+        "time": 64.0,
+        "energy": 0.88
+      },
+      {
+        "type": "drop",
+        "time": 96.0,
+        "magnitude": 0.62
+      },
+      {
+        "type": "buildup",
+        "start": 96.0,
+        "end": 144.0,
+        "increase": 0.6
+      },
+      {
+        "type": "drop",
+        "time": 160.0,
+        "magnitude": 0.32
+      },
+      {
+        "type": "drop",
+        "time": 176.0,
+        "magnitude": 0.32
+      },
+      {
+        "type": "peak",
+        "time": 208.0,
+        "energy": 0.9
+      }
+    ],
+    "structure": [
+      {
+        "section": "intro",
+        "start": 0,
+        "end": 48.0
+      },
+      {
+        "section": "groove",
+        "start": 48.0,
+        "end": 224.0
+      },
+      {
+        "section": "peak",
+        "start": 64.0,
+        "end": 96.0
+      }
+    ],
+    "no_cut_zones": [
+      [
+        0.0,
+        80.0
+      ],
+      [
+        93.0,
+        144.0
+      ],
+      [
+        157.0,
+        163.0
+      ],
+      [
+        173.0,
+        179.0
+      ],
+      [
+        205.0,
+        211.0
+      ]
+    ],
+    "safe_exit_points": [
+      32.0
+    ],
+    "dynamic_range": 1.0
+  }
 }
-

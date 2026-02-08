@@ -1,15 +1,17 @@
 /**
  * IA que selecciona la mejor canción siguiente
  * Toma decisiones basadas en múltiples criterios ponderados
+ * 🆕 FASE 4.0: Considera compatibilidad estructural (outro → intro)
  */
 class TrackSelector {
   constructor() {
     // Pesos del algoritmo de decisión (suman ~1.0)
     this.weights = {
-      bpmSimilarity: 0.35,      // 35% - Transiciones suaves
+      bpmSimilarity: 0.30,       // 30% - Transiciones suaves (bajado de 35%)
       vocalCompatibility: 0.30,  // 30% - Evitar conflictos
       energyFlow: 0.20,          // 20% - Progresión coherente
-      recentlyPlayed: 0.15       // 15% - Variedad
+      recentlyPlayed: 0.15,      // 15% - Variedad
+      structuralFit: 0.05        // 🆕 5% - Compatibilidad outro→intro
     };
     
     // ⭐ Array de últimas canciones reproducidas
@@ -19,7 +21,7 @@ class TrackSelector {
   }
 
   /**
-   * ★ FUNCIÓN PRINCIPAL ★
+   * ☆ FUNCIÓN PRINCIPAL ☆
    * Selecciona la mejor canción siguiente según contexto
    * 
    * @param {Object} currentTrack - {trackId, metadata}
@@ -99,16 +101,16 @@ class TrackSelector {
     
     candidates = candidatesFiltered;
     
-    // 3. Calcular score para cada candidato
+    // 4. Calcular score para cada candidato
     const scoredTracks = candidates.map(track => {
       const score = this.calculateScore(currentTrack, track, context);
       return { ...track, score };
     });
     
-    // 4. Ordenar por score (mejor primero)
+    // 5. Ordenar por score (mejor primero)
     scoredTracks.sort((a, b) => b.score - a.score);
     
-    // 5. Verificar si el mejor score es aceptable
+    // 6. Verificar si el mejor score es aceptable
     const bestScore = scoredTracks[0].score;
     
     if (bestScore < this.MIN_SCORE_THRESHOLD) {
@@ -119,7 +121,7 @@ class TrackSelector {
       );
     }
     
-    // 6. Log de decisión (top 3)
+    // 7. Log de decisión (top 3)
     console.log('📊 Top candidatos:');
     scoredTracks.slice(0, 3).forEach((track, i) => {
       const isRecent = this.recentTracks.includes(track.trackId) ? ' [RECIENTE]' : '';
@@ -132,11 +134,11 @@ class TrackSelector {
       );
     });
     
-    // 7. Seleccionar ganador
+    // 8. Seleccionar ganador
     const winner = scoredTracks[0];
     console.log(`✅ Seleccionada: "${winner.trackId}" (Score: ${winner.score.toFixed(3)}, Energy: ${winner.metadata.energy})`);
     
-    // 8. Actualizar array de recientes
+    // 9. Actualizar array de recientes
     this.addToRecent(winner.trackId);
     
     return winner;
@@ -161,6 +163,7 @@ class TrackSelector {
   /**
    * Calcula score de compatibilidad (0.0 a 1.0)
    * Combina múltiples factores con pesos configurables
+   * 🆕 Incluye nuevo criterio: structuralFit
    */
   calculateScore(currentTrack, candidateTrack, context) {
     const current = currentTrack.metadata;
@@ -171,7 +174,8 @@ class TrackSelector {
       bpm: this.scoreBPMSimilarity(current, candidate),
       vocal: this.scoreVocalCompatibility(current, candidate),
       energy: this.scoreEnergyFlow(current, candidate, context),
-      recency: this.scoreRecency(candidateTrack.trackId)
+      recency: this.scoreRecency(candidateTrack.trackId),
+      structural: this.scoreStructuralFit(currentTrack, candidateTrack)  // 🆕
     };
     
     // Score final ponderado
@@ -179,7 +183,8 @@ class TrackSelector {
       scores.bpm * this.weights.bpmSimilarity +
       scores.vocal * this.weights.vocalCompatibility +
       scores.energy * this.weights.energyFlow +
-      scores.recency * this.weights.recentlyPlayed;
+      scores.recency * this.weights.recentlyPlayed +
+      scores.structural * this.weights.structuralFit;  // 🆕
     
     return finalScore;
   }
@@ -274,6 +279,200 @@ class TrackSelector {
     // Posición 2 (menos reciente) = score 0.3
     const penalty = 1.0 - ((this.RECENT_LIMIT - index) / this.RECENT_LIMIT);
     return penalty;
+  }
+
+  // 🆕 ═══════════════════════════════════════════════════════════
+  // 🆕 CRITERIO 5: COMPATIBILIDAD ESTRUCTURAL (NUEVO)
+  // 🆕 ═══════════════════════════════════════════════════════════
+
+  /**
+   * 🆕 CRITERIO 5: Compatibilidad estructural (outro → intro)
+   * 
+   * Evalúa qué tan bien encaja el outro de la canción actual
+   * con el intro de la canción candidata.
+   * 
+   * FILOSOFÍA:
+   * - Outro tranquilo → Intro tranquilo = PERFECTO (transición suave)
+   * - Outro enérgico → Intro enérgico = BUENO (continuidad)
+   * - Outro tranquilo → Intro enérgico = MALO (choque)
+   * - Outro enérgico → Intro tranquilo = ACEPTABLE (contraste controlado)
+   * 
+   * @param {Object} currentTrack - Canción actual (con metadata completa)
+   * @param {Object} candidateTrack - Canción candidata (con metadata completa)
+   * @returns {number} Score 0.0-1.0 (0.5 = neutro si no hay análisis)
+   */
+  scoreStructuralFit(currentTrack, candidateTrack) {
+    const currentMeta = currentTrack.metadata;
+    const candidateMeta = candidateTrack.metadata;
+    
+    // ─────────────────────────────────────────────────────────
+    // 1. Validación: Si falta análisis en cualquiera, score neutro
+    // ─────────────────────────────────────────────────────────
+    if (!currentMeta.analysis || !candidateMeta.analysis) {
+      return 0.5;  // Neutro: no penaliza ni premia
+    }
+    
+    // ─────────────────────────────────────────────────────────
+    // 2. Extraer secciones outro e intro
+    // ─────────────────────────────────────────────────────────
+    const currentOutro = this.getSection(currentMeta.analysis, 'outro');
+    const candidateIntro = this.getSection(candidateMeta.analysis, 'intro');
+    
+    // Si no se detectaron estas secciones, score neutro
+    if (!currentOutro || !candidateIntro) {
+      return 0.5;
+    }
+    
+    // ─────────────────────────────────────────────────────────
+    // 3. Calcular energía promedio del outro e intro
+    // ─────────────────────────────────────────────────────────
+    const outroEnergy = this.getSectionEnergy(
+      currentMeta.analysis,
+      currentOutro
+    );
+    
+    const introEnergy = this.getSectionEnergy(
+      candidateMeta.analysis,
+      candidateIntro
+    );
+    
+    // Si no se pudo calcular energía, score neutro
+    if (outroEnergy === null || introEnergy === null) {
+      return 0.5;
+    }
+    
+    // ─────────────────────────────────────────────────────────
+    // 4. REGLAS DE COMPATIBILIDAD ESTRUCTURAL
+    // ─────────────────────────────────────────────────────────
+    
+    // REGLA 1: ✅ Outro tranquilo → Intro tranquilo (IDEAL)
+    if (outroEnergy < 0.4 && introEnergy < 0.4) {
+      console.log(
+        `🎯 Encaje estructural PERFECTO: ` +
+        `outro tranquilo (${outroEnergy.toFixed(2)}) → ` +
+        `intro tranquilo (${introEnergy.toFixed(2)})`
+      );
+      return 1.0;
+    }
+    
+    // REGLA 2: ✅ Outro enérgico → Intro enérgico (CONTINUIDAD)
+    if (outroEnergy > 0.7 && introEnergy > 0.7) {
+      console.log(
+        `🎯 Encaje estructural BUENO: ` +
+        `outro enérgico (${outroEnergy.toFixed(2)}) → ` +
+        `intro enérgico (${introEnergy.toFixed(2)})`
+      );
+      return 0.9;
+    }
+    
+    // REGLA 3: ⚠️ Outro enérgico → Intro tranquilo (CONTRASTE)
+    // Aceptable en algunos contextos (ej: cambio de ambiente)
+    if (outroEnergy > 0.6 && introEnergy < 0.4) {
+      return 0.6;
+    }
+    
+    // REGLA 4: ❌ Outro tranquilo → Intro enérgico (CHOQUE)
+    // Genera un salto abrupto, generalmente no deseable
+    if (outroEnergy < 0.4 && introEnergy > 0.7) {
+      console.log(
+        `⚠️ Encaje estructural MALO: ` +
+        `outro tranquilo (${outroEnergy.toFixed(2)}) → ` +
+        `intro muy enérgico (${introEnergy.toFixed(2)})`
+      );
+      return 0.3;
+    }
+    
+    // REGLA 5: Caso general - diferencia mínima es mejor
+    const energyDiff = Math.abs(outroEnergy - introEnergy);
+    const score = Math.max(0.4, 1.0 - energyDiff);
+    
+    return score;
+  }
+
+  // 🆕 ═══════════════════════════════════════════════════════════
+  // 🆕 FUNCIONES HELPER PARA ANÁLISIS
+  // 🆕 ═══════════════════════════════════════════════════════════
+
+  /**
+   * 🆕 Extrae una sección específica del análisis
+   * 
+   * @param {Object} analysis - Bloque de análisis
+   * @param {string} sectionName - Nombre de la sección ('intro', 'outro', etc.)
+   * @returns {Object|null} Sección encontrada o null
+   */
+  getSection(analysis, sectionName) {
+    // Validación defensiva
+    if (!analysis || !analysis.structure || !Array.isArray(analysis.structure)) {
+      return null;
+    }
+    
+    return analysis.structure.find(s => s.section === sectionName) || null;
+  }
+
+  /**
+   * 🆕 Calcula la energía promedio de una sección
+   * 
+   * MÉTODO:
+   * - Usa energy_curve para obtener valores de energía por segmento
+   * - Identifica qué segmentos caen dentro de la sección
+   * - Calcula el promedio de esos segmentos
+   * 
+   * @param {Object} analysis - Bloque de análisis
+   * @param {Object} section - Sección (con start y end)
+   * @returns {number|null} Energía promedio [0-1] o null si no se puede calcular
+   */
+  getSectionEnergy(analysis, section) {
+    // Validación defensiva
+    if (!analysis || !analysis.energy_curve || !Array.isArray(analysis.energy_curve)) {
+      return null;
+    }
+    
+    if (!section || typeof section.start !== 'number' || typeof section.end !== 'number') {
+      return null;
+    }
+    
+    const energyCurve = analysis.energy_curve;
+    const duration = analysis.duration;
+    
+    if (!duration || energyCurve.length === 0) {
+      return null;
+    }
+    
+    // ─────────────────────────────────────────────────────────
+    // Calcular duración de cada segmento en la curva
+    // ─────────────────────────────────────────────────────────
+    const segmentDuration = duration / energyCurve.length;
+    
+    // ─────────────────────────────────────────────────────────
+    // Encontrar índices de segmentos que caen en la sección
+    // ─────────────────────────────────────────────────────────
+    const startIdx = Math.floor(section.start / segmentDuration);
+    const endIdx = Math.ceil(section.end / segmentDuration);
+    
+    // Validar índices
+    const validStartIdx = Math.max(0, startIdx);
+    const validEndIdx = Math.min(energyCurve.length, endIdx);
+    
+    if (validStartIdx >= validEndIdx) {
+      return null;  // Sección vacía o fuera de rango
+    }
+    
+    // ─────────────────────────────────────────────────────────
+    // Extraer energías de esos segmentos
+    // ─────────────────────────────────────────────────────────
+    const sectionEnergies = energyCurve.slice(validStartIdx, validEndIdx);
+    
+    if (sectionEnergies.length === 0) {
+      return null;
+    }
+    
+    // ─────────────────────────────────────────────────────────
+    // Calcular promedio
+    // ─────────────────────────────────────────────────────────
+    const sum = sectionEnergies.reduce((acc, val) => acc + val, 0);
+    const avg = sum / sectionEnergies.length;
+    
+    return avg;
   }
 
   /**

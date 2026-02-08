@@ -4,6 +4,93 @@
   "mix_out": 172.9,
   "vocals": "media",
   "energy": 2,
-  "energyMode": "up"
+  "energyMode": "up",
+  "analysis": {
+    "version": "1.0",
+    "analyzed_at": "2026-02-07T19:26:34.141819Z",
+    "duration": 191.26,
+    "energy_curve": [
+      0.137,
+      0.09,
+      0.903,
+      1.0,
+      0.889,
+      0.387,
+      0.56,
+      0.927,
+      0.874,
+      0.0,
+      0.667
+    ],
+    "events": [
+      {
+        "type": "peak",
+        "time": 32.0,
+        "energy": 0.9
+      },
+      {
+        "type": "peak",
+        "time": 48.0,
+        "energy": 1.0
+      },
+      {
+        "type": "drop",
+        "time": 80.0,
+        "magnitude": 0.5
+      },
+      {
+        "type": "peak",
+        "time": 112.0,
+        "energy": 0.93
+      },
+      {
+        "type": "drop",
+        "time": 144.0,
+        "magnitude": 0.87
+      }
+    ],
+    "structure": [
+      {
+        "section": "intro",
+        "start": 0,
+        "end": 32.0
+      },
+      {
+        "section": "peak",
+        "start": 32.0,
+        "end": 80.0
+      },
+      {
+        "section": "groove",
+        "start": 32.0,
+        "end": 176.0
+      }
+    ],
+    "no_cut_zones": [
+      [
+        29.0,
+        35.0
+      ],
+      [
+        45.0,
+        51.0
+      ],
+      [
+        77.0,
+        83.0
+      ],
+      [
+        109.0,
+        115.0
+      ],
+      [
+        141.0,
+        147.0
+      ]
+    ],
+    "safe_exit_points": [
+      16.0
+    ],
+    "dynamic_range": 1.0
+  }
 }
-
